@@ -18,7 +18,21 @@ const allRides = getAllRides()
 
 allRides.forEach(async ([id, value]) => {
 
-    const ride = JSON.parse(value)
+    let ride
+
+    // 🔹 Proteção contra lixo no localStorage
+    try {
+        ride = JSON.parse(value)
+    } catch {
+        deleteRide(id)
+        return
+    }
+
+    // 🔴 REMOVE RIDES VAZIOS
+    if (!ride.data || ride.data.length === 0) {
+        deleteRide(id)
+        return
+    }
 
     ride.id = id
 
