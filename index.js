@@ -1,4 +1,19 @@
 const rideListElement = document.querySelector("#rideList")
+if (getAllRides().length === 0) {
+
+    const exampleRideID = Date.now()
+    const exampleRide = {
+        id: exampleRideID,
+        data: [
+            { latitude: -23.55052, longitude: -46.633308, speed: 10, timestamp: Date.now() },
+            { latitude: -23.55100, longitude: -46.634000, speed: 12, timestamp: Date.now() + 60000 }
+        ],
+        startTime: Date.now(),
+        stopTime: Date.now() + 60000
+    }
+
+    saveRideRecord(exampleRideID, exampleRide)
+}
 const allRides = getAllRides()
 
 allRides.forEach(async ([id, value]) => {
