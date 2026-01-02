@@ -1,5 +1,4 @@
 // index.js
-
 import { getLocationData, getMaxSpeed, getDistance, getDuration, getStartDate } from "./functions.js";
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -19,10 +18,12 @@ document.addEventListener("DOMContentLoaded", async () => {
                 const parsed = JSON.parse(value);
                 if (parsed && parsed.data && Array.isArray(parsed.data) && parsed.data.length > 0) {
                     rides.push([key, value]);
+                } else {
+                    // Remove rides vazios
+                    localStorage.removeItem(key);
                 }
-            } catch (e) {
-                // Ignora rides corrompidos
-                console.warn("Ride corrompido removido:", key);
+            } catch {
+                // Remove rides corrompidos
                 localStorage.removeItem(key);
             }
         }
@@ -37,21 +38,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         localStorage.removeItem(id);
     }
 
-    // Remove rides inválidos antes de criar o fake
     function cleanEmptyRides() {
-        const allRides = getAllRides();
-        allRides.forEach(([id, value]) => {
-            try {
-                const parsed = JSON.parse(value);
-                if (!parsed || !parsed.data || !Array.isArray(parsed.data) || parsed.data.length === 0) {
-                    localStorage.removeItem(id);
-                    console.log("Removed invalid ride:", id);
-                }
-            } catch {
-                localStorage.removeItem(id);
-                console.log("Removed corrupted ride:", id);
-            }
-        });
+        const allRides = getAllRides(); // já remove inválidos
+        console.log("Rides limpos:", allRides);
     }
 
     async function createRideItem(ride) {
@@ -60,20 +49,22 @@ document.addEventListener("DOMContentLoaded", async () => {
         itemElement.className = "d-flex p-1 align-items-center mt-1 gap-3 justify-content-between shadow-sm";
         rideListElement.appendChild(itemElement);
 
+        // Clique para detalhe
         itemElement.addEventListener("click", () => {
             window.location.href = `./detail.html?id=${ride.id}`;
         });
 
         const firstPosition = ride.data[0];
 
-        // Tenta buscar localização, fallback se falhar
+        // Localização
         let firstLocationData;
         try {
             firstLocationData = await getLocationData(firstPosition.latitude, firstPosition.longitude);
-        } catch (e) {
+        } catch {
             firstLocationData = { city: "Lisbon", countryCode: "PT" };
         }
 
+        // Elementos
         const mapID = `map${ride.id}`;
         const mapElement = document.createElement("div");
         mapElement.id = mapID;
@@ -103,6 +94,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         dataElement.append(cityDiv, maxSpeedDiv, distanceDiv, durationDiv, dateDiv);
 
+        // Botão delete
         const btnContainer = document.createElement("div");
         btnContainer.className = "d-flex gap-2";
 
@@ -135,9 +127,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     // ===== Inicialização =====
     cleanEmptyRides();
 
-    // Cria fake se não houver rides válidas
-    const fakeId = "ride-fake-1";
+    // Cria fakeRide se não houver rides válidas
     if (getAllRides().length === 0) {
+        const fakeId = "ride-fake-1";
         const fakeRide = {
             id: fakeId,
             data: [
@@ -150,11 +142,13 @@ document.addEventListener("DOMContentLoaded", async () => {
         saveRide(fakeId, fakeRide);
     }
 
-    // Renderiza todas rides válidas
+    // Renderiza rides válidas
     const allRides = getAllRides();
     for (let [id, value] of allRides) {
         const ride = JSON.parse(value);
         ride.id = id;
         await createRideItem(ride);
     }
+
+    console.log("Rides renderizadas:", allRides);
 });
