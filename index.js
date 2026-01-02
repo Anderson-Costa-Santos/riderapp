@@ -1,93 +1,155 @@
-const rideListElement = document.querySelector("#rideList")
-if (getAllRides().length === 0) {
+import { getLocationData, getMaxSpeed, getDistance, getDuration, getStartDate } from "./functions.js";
 
-    const exampleRideID = Date.now()
-    const exampleRide = {
-        id: exampleRideID,
-        data: [
-            { latitude: -23.55052, longitude: -46.633308, speed: 10, timestamp: Date.now() },
-            { latitude: -23.55100, longitude: -46.634000, speed: 12, timestamp: Date.now() + 60000 }
-        ],
-        startTime: Date.now(),
-        stopTime: Date.now() + 60000
+document.addEventListener("DOMContentLoaded", async () => {
+
+    const rideListElement = document.querySelector("#rideList");
+    if (!rideListElement) {
+        console.error("rideListElement não encontrado!");
+        return;
     }
 
-    saveRideRecord(exampleRideID, exampleRide)
-}
-const allRides = getAllRides()
+    // ===== Funções de armazenamento =====
+    function getAllRides() {
+        const rides = [];
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            const value = localStorage.getItem(key);
+            try {
+                const parsed = JSON.parse(value);
+                if (parsed && parsed.data && Array.isArray(parsed.data)) {
+                    rides.push([key, value]);
+                }
+            } catch (e) { continue; }
+        }
+        return rides;
+    }
 
-allRides.forEach(async ([id, value]) => {
+    function saveRide(id, ride) {
+        localStorage.setItem(id, JSON.stringify(ride));
+    }
 
-    const ride = JSON.parse(value)
+    function deleteRide(id) {
+        localStorage.removeItem(id);
+    }
 
-    ride.id = id
+    function cleanEmptyRides() {
+        const allRides = getAllRides();
+        allRides.forEach(([id, value]) => {
+            if (!value || value === "{}") {
+                localStorage.removeItem(id);
+            }
+        });
+    }
 
-    const itemElement = document.createElement("li")
-    itemElement.id = ride.id
-    itemElement.className = "d-flex p-1 align-items-center mt-1 gap-3 justify-content-between shadow-sm  "
-    rideListElement.appendChild(itemElement)
+    // ===== Cria fake ride ANTES de pegar todas as rides =====
+    const fakeId = "ride-fake-1";
+    if (!localStorage.getItem(fakeId)) {
+        const fakeRide = {
+            id: fakeId,
+            data: [
+                { latitude: 38.7169, longitude: -9.139 },
+                { latitude: 38.7175, longitude: -9.140 },
+            ],
+            startTime: Date.now(),
+            stopTime: Date.now() + 15 * 60 * 1000,
+        };
+        saveRide(fakeId, fakeRide);
+    }
 
-    itemElement.addEventListener("click", () => {
-        window.location.href = `./detail.html?id=${ride.id}`
-    })
+    // ===== Limpa rides vazias =====
+    cleanEmptyRides();
+    const allRides = getAllRides();
 
-    const firstPosition = ride.data[0]
-    const firstLocationData = await getLocationData(firstPosition.latitude, firstPosition.longitude)
+    // ===== Função para criar item da lista =====
+    async function createRideItem(ride) {
 
-    const mapID = `map${ride.id}`
-    const mapElement = document.createElement("div")
-    mapElement.id = mapID
-    mapElement.style = "width:100px;height:100px"
-    mapElement.classList.add("bg-secondary")
-    mapElement.classList.add("rounded-4")
+        const itemElement = document.createElement("li");
+        itemElement.id = ride.id;
+        itemElement.className = "d-flex p-1 align-items-center mt-1 gap-3 justify-content-between shadow-sm";
 
+        // MAP primeiro
+        const mapID = `map${ride.id}`;
+        const mapElement = document.createElement("div");
+        mapElement.id = mapID;
+        mapElement.style = "width:120px;height:120px;flex-shrink:0";
+        mapElement.classList.add("bg-secondary", "rounded-4");
+        itemElement.appendChild(mapElement);
 
-    const dataElement = document.createElement("div")
-    dataElement.className = "flex-fill  d-flex flex-column"
+        // DADOS
+        const firstPosition = ride.data[0];
+        let firstLocationData;
+        try {
+            firstLocationData = await getLocationData(firstPosition.latitude, firstPosition.longitude);
+        } catch {
+            firstLocationData = { city: "Lisbon", countryCode: "PT" };
+        }
 
+        const dataElement = document.createElement("div");
+        dataElement.className = "flex-fill d-flex flex-column";
 
-    const cityDiv = document.createElement("div")
-    cityDiv.innerText = `${firstLocationData.city} - ${firstLocationData.countryCode}`
-    cityDiv.className = "text-primary mb-2"
+        const cityDiv = document.createElement("div");
+        cityDiv.innerText = `${firstLocationData.city} - ${firstLocationData.countryCode}`;
+        cityDiv.className = "text-primary mb-2";
 
-    const maxSpeedDiv = document.createElement("div")
-    maxSpeedDiv.innerText = `Max speed: ${getMaxSpeed(ride.data)} Km/h`
-    maxSpeedDiv.className = "h5"
+        const maxSpeedDiv = document.createElement("div");
+        maxSpeedDiv.innerText = `Max speed: ${getMaxSpeed(ride.data)} Km/h`;
+        maxSpeedDiv.className = "h5";
 
-    const distanceDiv = document.createElement("div")
-    distanceDiv.innerText = `Distance: ${getDistance(ride.data)} Km`
+        const distanceDiv = document.createElement("div");
+        distanceDiv.innerText = `Distance: ${getDistance(ride.data)} Km`;
 
-    const durationDiv = document.createElement("div")
-    durationDiv.innerText = `Duration: ${getDuration(ride)}`
+        const durationDiv = document.createElement("div");
+        durationDiv.innerText = `Duration: ${getDuration(ride)}`;
 
-    const dateDiv = document.createElement("div")
-    dateDiv.innerText = getStartDate(ride)
-    dateDiv.className = "text-secondary mt-2"
+        const dateDiv = document.createElement("div");
+        dateDiv.innerText = getStartDate(ride);
+        dateDiv.className = "text-secondary mt-2";
 
-    dataElement.appendChild(cityDiv)
-    dataElement.appendChild(maxSpeedDiv)
-    dataElement.appendChild(distanceDiv)
-    dataElement.appendChild(durationDiv)
-    dataElement.appendChild(dateDiv)
+        dataElement.append(cityDiv, maxSpeedDiv, distanceDiv, durationDiv, dateDiv);
+        itemElement.appendChild(dataElement);
 
-    itemElement.appendChild(mapElement)
-    itemElement.appendChild(dataElement)
+        // BOTÕES
+        const btnContainer = document.createElement("div");
+        btnContainer.className = "d-flex gap-2";
 
+        const deleteBtn = document.createElement("button");
+        deleteBtn.innerText = "🗑️";
+        deleteBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            deleteRide(ride.id);
+            rideListElement.removeChild(itemElement);
+        });
 
-    const map = L.map(mapID, {
-        zoomControl: false,
-        dragging: false,
-        attributionControl:false,
-        scrollWheelZoom:false
-    })
-    map.setView([firstPosition.latitude, firstPosition.longitude], 10 )
-    L.tileLayer('https://{s}.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png', {
-        maxZoom: 20
+        btnContainer.appendChild(deleteBtn);
+        itemElement.appendChild(btnContainer);
 
-    }).addTo(map);
+        // CLICK para detalhes
+        itemElement.addEventListener("click", () => {
+            window.location.href = `./detail.html?id=${ride.id}`;
+        });
 
-    L.marker([firstPosition.latitude, firstPosition.longitude]).addTo(map)
+        // ADICIONA AO UL
+        rideListElement.appendChild(itemElement);
 
+        // Inicializa mapa APÓS estar no DOM
+        const map = L.map(mapID, {
+            zoomControl: false,
+            dragging: false,
+            attributionControl: false,
+            scrollWheelZoom: false,
+        });
+        map.setView([firstPosition.latitude, firstPosition.longitude], 10);
+        L.tileLayer("https://{s}.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png", { maxZoom: 20 }).addTo(map);
+        L.marker([firstPosition.latitude, firstPosition.longitude]).addTo(map);
+        const latlngs = ride.data.map(p => [p.latitude, p.longitude]);
+        L.polyline(latlngs, { color: "blue" }).addTo(map);
+    }
 
-})
+    // ===== Renderiza todas rides =====
+    for (let [id, value] of allRides) {
+        const ride = JSON.parse(value);
+        ride.id = id;
+        await createRideItem(ride);
+    }
 
+});
