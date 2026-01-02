@@ -1,7 +1,8 @@
+// index.js
+
 import { getLocationData, getMaxSpeed, getDistance, getDuration, getStartDate } from "./functions.js";
 
 document.addEventListener("DOMContentLoaded", async () => {
-
     const rideListElement = document.querySelector("#rideList");
     if (!rideListElement) {
         console.error("rideListElement não encontrado!");
@@ -16,10 +17,14 @@ document.addEventListener("DOMContentLoaded", async () => {
             const value = localStorage.getItem(key);
             try {
                 const parsed = JSON.parse(value);
-                if (parsed && parsed.data && Array.isArray(parsed.data)) {
+                if (parsed && parsed.data && Array.isArray(parsed.data) && parsed.data.length > 0) {
                     rides.push([key, value]);
                 }
-            } catch (e) { continue; }
+            } catch (e) {
+                // Ignora rides corrompidos
+                console.warn("Ride corrompido removido:", key);
+                localStorage.removeItem(key);
+            }
         }
         return rides;
     }
@@ -32,57 +37,48 @@ document.addEventListener("DOMContentLoaded", async () => {
         localStorage.removeItem(id);
     }
 
+    // Remove rides inválidos antes de criar o fake
     function cleanEmptyRides() {
         const allRides = getAllRides();
         allRides.forEach(([id, value]) => {
-            if (!value || value === "{}") {
+            try {
+                const parsed = JSON.parse(value);
+                if (!parsed || !parsed.data || !Array.isArray(parsed.data) || parsed.data.length === 0) {
+                    localStorage.removeItem(id);
+                    console.log("Removed invalid ride:", id);
+                }
+            } catch {
                 localStorage.removeItem(id);
+                console.log("Removed corrupted ride:", id);
             }
         });
     }
 
-    // ===== Cria fake ride ANTES de pegar todas as rides =====
-    const fakeId = "ride-fake-1";
-    if (!localStorage.getItem(fakeId)) {
-        const fakeRide = {
-            id: fakeId,
-            data: [
-                { latitude: 38.7169, longitude: -9.139 },
-                { latitude: 38.7175, longitude: -9.140 },
-            ],
-            startTime: Date.now(),
-            stopTime: Date.now() + 15 * 60 * 1000,
-        };
-        saveRide(fakeId, fakeRide);
-    }
-
-    // ===== Limpa rides vazias =====
-    cleanEmptyRides();
-    const allRides = getAllRides();
-
-    // ===== Função para criar item da lista =====
     async function createRideItem(ride) {
-
         const itemElement = document.createElement("li");
         itemElement.id = ride.id;
         itemElement.className = "d-flex p-1 align-items-center mt-1 gap-3 justify-content-between shadow-sm";
+        rideListElement.appendChild(itemElement);
 
-        // MAP primeiro
-        const mapID = `map${ride.id}`;
-        const mapElement = document.createElement("div");
-        mapElement.id = mapID;
-        mapElement.style = "width:120px;height:120px;flex-shrink:0";
-        mapElement.classList.add("bg-secondary", "rounded-4");
-        itemElement.appendChild(mapElement);
+        itemElement.addEventListener("click", () => {
+            window.location.href = `./detail.html?id=${ride.id}`;
+        });
 
-        // DADOS
         const firstPosition = ride.data[0];
+
+        // Tenta buscar localização, fallback se falhar
         let firstLocationData;
         try {
             firstLocationData = await getLocationData(firstPosition.latitude, firstPosition.longitude);
-        } catch {
+        } catch (e) {
             firstLocationData = { city: "Lisbon", countryCode: "PT" };
         }
+
+        const mapID = `map${ride.id}`;
+        const mapElement = document.createElement("div");
+        mapElement.id = mapID;
+        mapElement.style = "width:100px;height:100px";
+        mapElement.classList.add("bg-secondary", "rounded-4");
 
         const dataElement = document.createElement("div");
         dataElement.className = "flex-fill d-flex flex-column";
@@ -106,9 +102,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         dateDiv.className = "text-secondary mt-2";
 
         dataElement.append(cityDiv, maxSpeedDiv, distanceDiv, durationDiv, dateDiv);
-        itemElement.appendChild(dataElement);
 
-        // BOTÕES
         const btnContainer = document.createElement("div");
         btnContainer.className = "d-flex gap-2";
 
@@ -121,17 +115,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
 
         btnContainer.appendChild(deleteBtn);
-        itemElement.appendChild(btnContainer);
+        itemElement.append(mapElement, dataElement, btnContainer);
 
-        // CLICK para detalhes
-        itemElement.addEventListener("click", () => {
-            window.location.href = `./detail.html?id=${ride.id}`;
-        });
-
-        // ADICIONA AO UL
-        rideListElement.appendChild(itemElement);
-
-        // Inicializa mapa APÓS estar no DOM
+        // Inicializa mapa
         const map = L.map(mapID, {
             zoomControl: false,
             dragging: false,
@@ -141,15 +127,34 @@ document.addEventListener("DOMContentLoaded", async () => {
         map.setView([firstPosition.latitude, firstPosition.longitude], 10);
         L.tileLayer("https://{s}.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png", { maxZoom: 20 }).addTo(map);
         L.marker([firstPosition.latitude, firstPosition.longitude]).addTo(map);
+
         const latlngs = ride.data.map(p => [p.latitude, p.longitude]);
         L.polyline(latlngs, { color: "blue" }).addTo(map);
     }
 
-    // ===== Renderiza todas rides =====
+    // ===== Inicialização =====
+    cleanEmptyRides();
+
+    // Cria fake se não houver rides válidas
+    const fakeId = "ride-fake-1";
+    if (getAllRides().length === 0) {
+        const fakeRide = {
+            id: fakeId,
+            data: [
+                { latitude: 38.7169, longitude: -9.139 },
+                { latitude: 38.7175, longitude: -9.140 },
+            ],
+            startTime: Date.now(),
+            stopTime: Date.now() + 15 * 60 * 1000,
+        };
+        saveRide(fakeId, fakeRide);
+    }
+
+    // Renderiza todas rides válidas
+    const allRides = getAllRides();
     for (let [id, value] of allRides) {
         const ride = JSON.parse(value);
         ride.id = id;
         await createRideItem(ride);
     }
-
 });
